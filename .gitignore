@@ -14,4 +14,4 @@ docs/
 .env
 
 # lib folder
-lib/
+lib/*
