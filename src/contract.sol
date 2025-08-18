@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "forge-std/console.sol";
 
 /// @title Simple DEX Contract
 /// @notice A minimal decentralized exchange allowing users to add and withdraw liquidity
@@ -69,6 +70,33 @@ contract DEX is ERC20 {
         // Transfer proportional ETH and tokens
         user.transfer(userEthereum);
         ERC20(token).transfer(msg.sender, _amount);
+    }
+
+    /// @notice Allows users to swap eth for tokens
+    /// @dev Sends proportional tokens to the user
+    function swapEthToToken() public payable {
+        require(msg.value > 0, "You should send ether to swap");
+        uint256 totalTokens = getTokensInContract();
+        uint256 reservedEth = address(this).balance - msg.value;
+        uint256 k = totalTokens * reservedEth;
+        uint256 withdrawTokens = k / address(this).balance;
+        console.log("Amount to swap", withdrawTokens);
+        ERC20(token).transfer(msg.sender, withdrawTokens);
+    }
+
+    /// @notice Allows users to swap tokens for eth
+    /// @dev Sends proportional eth to the user
+    function swapTokenToEth(uint256 _amount) public payable {
+        require(_amount > 0, "You should send ether to swap");
+        require(msg.value <= 0, "You can not send any ether");
+
+        uint256 totalTokens = getTokensInContract();
+        uint256 reservedEth = address(this).balance;
+        uint256 k = totalTokens * reservedEth;
+        uint256 withdrawEth = k / (totalTokens + _amount);
+        console.log("Ether to send", withdrawEth);
+        payable(msg.sender).transfer(withdrawEth);
+        ERC20(token).transferFrom(msg.sender, address(this), _amount);
     }
 
     // ========================

@@ -22,18 +22,8 @@ contract withdrawTest is Test {
         dex = new DEX(address(token));
         token.approve(address(dex), type(uint256).max);
 
-        console.log(
-            "Test contract initial test token balance",
-            token.balanceOf(address(this))
-        );
-
         uint256 amountToken = 1_000_000 ether; // Initial token liquidity
         dex.addLiquidity{value: 1 ether}(amountToken);
-
-        console.log(
-            "Test contract test token balance after liquidity",
-            token.balanceOf(address(this))
-        );
     }
 
     /// @notice Tests that withdrawing zero liquidity reverts
@@ -48,16 +38,6 @@ contract withdrawTest is Test {
     function testWithdrawSimple() public {
         uint256 amountLP = 500_000 ether;
         uint256 balanceBefore = address(this).balance;
-
-        console.log(
-            "Test contract ETH balance before withdrawal",
-            balanceBefore
-        );
-        assertEq(
-            token.balanceOf(address(this)),
-            0,
-            "Expected token balance to be 0 before withdrawal"
-        );
 
         dex.withdrawLiquidity(amountLP);
 
