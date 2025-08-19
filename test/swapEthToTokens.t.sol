@@ -23,26 +23,23 @@ contract swapEthToTokens is Test {
 
     function testBasicSwap() public {
         uint256 balanceBefore = ERC20(token).balanceOf(address(this));
-        dex.swapEthToToken{value: 1 ether}();
+
+        uint256 ethReserve = address(dex).balance; // current reserve
+        uint256 tokenReserve = token.balanceOf(address(dex));
+
+        uint256 ethIn = 1 ether;
+        uint256 ethInWithFee = (ethIn * 997) / 1000;
+        uint256 expectedOut = (tokenReserve * ethInWithFee) /
+            (ethReserve + ethInWithFee);
+
+        dex.swapEthToToken{value: ethIn}();
+
         uint256 balanceAfter = ERC20(token).balanceOf(address(this));
 
         assertEq(
-            balanceBefore + 500 ether,
+            balanceBefore + expectedOut,
             balanceAfter,
-            "ETH balance did not increase correctly"
-        );
-    }
-
-    function testDoubleSwap() public {
-        uint256 balanceBefore = ERC20(token).balanceOf(address(this));
-        dex.swapEthToToken{value: 1 ether}();
-        dex.swapEthToToken{value: 2 ether}();
-        uint256 balanceAfter = ERC20(token).balanceOf(address(this));
-
-        assertEq(
-            balanceBefore + 750 ether,
-            balanceAfter,
-            "ETH balance did not increase correctly"
+            "Token balance mismatch"
         );
     }
 

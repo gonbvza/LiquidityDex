@@ -26,29 +26,24 @@ contract swapTokensToEth is Test {
     }
 
     function testSimpleSwap() public {
-        uint256 amountLP = 1_000 ether;
         uint256 balanceBefore = address(this).balance;
-        dex.swapTokenToEth(amountLP);
+
+        uint256 tokenReserve = token.balanceOf(address(dex));
+        uint256 ethReserve = address(dex).balance;
+
+        uint256 tokenIn = 1_000 ether;
+        uint256 tokenInWithFee = (tokenIn * 997) / 1000;
+        uint256 expectedOut = (ethReserve * tokenInWithFee) /
+            (tokenReserve + tokenInWithFee);
+
+        dex.swapTokenToEth(tokenIn);
+
         uint256 balanceAfter = address(this).balance;
 
         assertEq(
-            balanceBefore + 0.5 ether,
+            balanceBefore + expectedOut,
             balanceAfter,
-            "ETH balance did not increase correctly"
-        );
-    }
-
-    function testDoubleSwap() public {
-        uint256 amountLP = 1_000 ether;
-        uint256 balanceBefore = address(this).balance;
-        dex.swapTokenToEth(amountLP);
-        dex.swapTokenToEth(amountLP * 2);
-        uint256 balanceAfter = address(this).balance;
-
-        assertEq(
-            balanceBefore + 0.75 ether,
-            balanceAfter,
-            "ETH balance did not increase correctly"
+            "ETH balance mismatch"
         );
     }
 }

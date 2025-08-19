@@ -2,7 +2,6 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "forge-std/console.sol";
 
 /// @title Simple DEX Contract
 /// @notice A minimal decentralized exchange allowing users to add and withdraw liquidity
@@ -72,31 +71,42 @@ contract DEX is ERC20 {
         ERC20(token).transfer(msg.sender, _amount);
     }
 
-    /// @notice Allows users to swap eth for tokens
-    /// @dev Sends proportional tokens to the user
+    /// @notice Allows users to swap ETH for tokens
+    /// @dev Uses constant product formula with 0.3% fee
     function swapEthToToken() public payable {
         require(msg.value > 0, "You should send ether to swap");
-        uint256 totalTokens = getTokensInContract();
-        uint256 reservedEth = address(this).balance - msg.value;
-        uint256 k = totalTokens * reservedEth;
-        uint256 withdrawTokens = k / address(this).balance;
-        console.log("Amount to swap", withdrawTokens);
-        ERC20(token).transfer(msg.sender, withdrawTokens);
+
+        uint256 ethReserve = address(this).balance - msg.value; // reserve before this swap
+        uint256 tokenReserve = getTokensInContract();
+
+        // Apply 0.3% fee
+        uint256 ethInWithFee = (msg.value * 997) / 1000;
+
+        uint256 tokensOut = (tokenReserve * ethInWithFee) /
+            (ethReserve + ethInWithFee);
+        require(tokensOut > 0, "Insufficient output");
+
+        ERC20(token).transfer(msg.sender, tokensOut);
     }
 
-    /// @notice Allows users to swap tokens for eth
-    /// @dev Sends proportional eth to the user
-    function swapTokenToEth(uint256 _amount) public payable {
-        require(_amount > 0, "You should send ether to swap");
-        require(msg.value <= 0, "You can not send any ether");
+    /// @notice Allows users to swap tokens for ETH
+    /// @dev Uses constant product formula with 0.3% fee
+    function swapTokenToEth(uint256 _amount) public {
+        require(_amount > 0, "You should send tokens to swap");
 
-        uint256 totalTokens = getTokensInContract();
-        uint256 reservedEth = address(this).balance;
-        uint256 k = totalTokens * reservedEth;
-        uint256 withdrawEth = k / (totalTokens + _amount);
-        console.log("Ether to send", withdrawEth);
-        payable(msg.sender).transfer(withdrawEth);
+        uint256 tokenReserve = getTokensInContract();
+        uint256 ethReserve = address(this).balance;
+
         ERC20(token).transferFrom(msg.sender, address(this), _amount);
+
+        // Apply 0.3% fee
+        uint256 tokenInWithFee = (_amount * 997) / 1000;
+
+        uint256 ethOut = (ethReserve * tokenInWithFee) /
+            (tokenReserve + tokenInWithFee);
+        require(ethOut > 0, "Insufficient output");
+
+        payable(msg.sender).transfer(ethOut);
     }
 
     // ========================
