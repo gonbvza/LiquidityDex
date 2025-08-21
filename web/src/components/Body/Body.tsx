@@ -1,21 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { addressShortener } from "../../utils/Address";
-import {
-  formatEther,
-  parseUnits,
-  JsonRpcProvider,
-  parseEther,
-  Contract,
-  BrowserProvider,
-} from "ethers";
-import { weiToEther } from "../../utils/ethConverter";
+import { formatEther, JsonRpcProvider, Contract } from "ethers";
 import { ABIS } from "../../assets/SwapContractAbi";
+import { addLiquidity, executeSwap } from "../../utils/contract";
+import { ERC20_TOKEN, RPC_URL, SWAP_CONTRACT } from "../../utils/constants";
+import { connectWallet } from "../../utils/connectWallet";
 
-const RPC_URL = import.meta.env.VITE_RPC_URL;
-const SWAP_CONTRACT = "0x920977dc3862cf8549425728Cc56b36c5a012f39";
-const ERC20_TOKEN = "0xf0dcFeA06962313d2963d7Ff9CA49b43B3dAa62b";
-console.log("RPC URL:", RPC_URL);
-
+/**
+ * Body component renders the main DEX UI for swapping tokens and adding liquidity.
+ */
 const Body = () => {
   const [fromToken, setFromToken] = useState({
     symbol: "ETH",
@@ -35,26 +28,38 @@ const Body = () => {
   const [ethLiquidity, setEthLiquidity] = useState(0);
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
-  const [slippage, setSlippage] = useState("0.5");
   const [showSettings, setShowSettings] = useState(false);
-  const [walletAddress, setwalletAddress] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
   const [swapRatio, setSwapRatio] = useState("");
 
+  /**
+   * Fetches DEX contract balances and current swap ratio on mount.
+   */
   useEffect(() => {
     const fetchBalance = async () => {
       try {
         const provider = new JsonRpcProvider(RPC_URL);
         const tokenContract = new Contract(ERC20_TOKEN, ABIS.ERC20, provider);
-        let eth_balance = formatEther(await provider.getBalance(SWAP_CONTRACT));
-        let unparsedTokenBalance = await tokenContract.balanceOf(SWAP_CONTRACT);
-        let token_balance = formatEther(unparsedTokenBalance.toString());
+
+        const ethBalance = Number(
+          formatEther(await provider.getBalance(SWAP_CONTRACT)),
+        ).toFixed(3);
+
+        const tokenRawBalance = await tokenContract.balanceOf(SWAP_CONTRACT);
+        const tokenBalance = formatEther(tokenRawBalance.toString());
 
         setSwapContractBalance({
-          token: token_balance.toString(),
-          eth: eth_balance,
+          token: tokenBalance.toString(),
+          eth: ethBalance,
         });
 
-        console.log("Ethereum balance is ", eth_balance);
+        const dexContract = new Contract(
+          SWAP_CONTRACT,
+          ABIS.Contract,
+          provider,
+        );
+        const ratio = Number(await dexContract.getRatio()).toString();
+        setSwapRatio(ratio);
       } catch (error) {
         console.error("Error fetching balance:", error);
       }
@@ -62,73 +67,20 @@ const Body = () => {
 
     fetchBalance();
   }, []);
+
+  /**
+   * Swaps `fromToken` and `toToken` states including their amounts.
+   */
   const swapTokens = () => {
-    const temp = fromToken;
     setFromToken(toToken);
-    setToToken(temp);
+    setToToken(fromToken);
     setFromAmount(toAmount);
     setToAmount(fromAmount);
   };
 
-  async function connectWallet() {
-    if (!window.ethereum) {
-      console.error("MetaMask not detected!");
-      return;
-    }
-
-    const provider = new BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const address = await signer.getAddress();
-    const balance = await provider.getBalance(address);
-
-    setwalletAddress(address);
-    setFromToken({
-      ...fromToken,
-      balance: Number(weiToEther(balance)).toFixed(3),
-    });
-    console.log("Connected wallet:", address);
-    const contract = new Contract(ERC20_TOKEN, ABIS.Contract, provider);
-
-    let tokenBalance = await contract.balanceOf(address);
-    setToToken({
-      ...toToken,
-      balance: Number(weiToEther(tokenBalance)).toFixed(3),
-    });
-
-    const dexContract = new Contract(SWAP_CONTRACT, ABIS.Contract, provider);
-
-    setSwapRatio(Number(await dexContract.getRatio()).toString());
-  }
-
-  function handleTokenInput(_amount: number) {
-    setTokenLiquidity(_amount);
-  }
-
-  function handleEthInput(_amount: number) {
-    setEthLiquidity(_amount);
-  }
-
-  async function addLiquidity() {
-    if (!tokenLiquidity || tokenLiquidity === undefined) {
-      throw new Error("liquidity is missing");
-    }
-
-    const provider = new BrowserProvider(window.ethereum);
-    const tokenContract = new Contract(ERC20_TOKEN, ABIS.ERC20, provider);
-    const signer = await provider.getSigner();
-    const tokenWithSigner = tokenContract.connect(signer);
-    const amount = parseUnits(tokenLiquidity.toString(), 18);
-    await tokenWithSigner.approve(SWAP_CONTRACT, amount);
-
-    const swapContract = new Contract(SWAP_CONTRACT, ABIS.Contract, provider);
-    const swapWithSigner = swapContract.connect(signer);
-    const tx = await swapWithSigner.addLiquidity(amount, {
-      value: parseEther(ethLiquidity.toString()),
-    });
-
-    await tx.wait();
-  }
-
+  /**
+   * Handles change in `fromAmount` input and auto-calculates `toAmount`.
+   */
   const handleFromAmountChange = (e: any) => {
     const value = e.target.value;
     setFromAmount(value);
@@ -155,7 +107,15 @@ const Body = () => {
               </div>
             </div>
             <button
-              onClick={() => connectWallet()}
+              onClick={() =>
+                connectWallet({
+                  setWalletAddress,
+                  setFromToken,
+                  setToToken,
+                  fromToken,
+                  toToken,
+                })
+              }
               className="cursor-pointer bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-6 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2"
             >
               <span>
@@ -209,7 +169,7 @@ const Body = () => {
                 <div className="flex justify-center">
                   <button
                     onClick={swapTokens}
-                    className="p-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg border border-gray-600/50 transition-all hover:scale-110"
+                    className="cursor-pointer p-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg border border-gray-600/50 transition-all hover:scale-110"
                   >
                     Change
                   </button>
@@ -264,6 +224,19 @@ const Body = () => {
 
                 {/* Swap Button */}
                 <button
+                  onClick={() =>
+                    executeSwap({
+                      walletAddress,
+                      fromAmount,
+                      toAmount,
+                      fromToken,
+                      toToken,
+                      setFromToken,
+                      setToToken,
+                      setFromAmount,
+                      setToAmount,
+                    })
+                  }
                   disabled={!fromAmount || !toAmount}
                   className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
                     fromAmount && toAmount
@@ -303,7 +276,7 @@ const Body = () => {
                       type="number"
                       placeholder="0.0"
                       value={tokenLiquidity}
-                      onChange={(e: any) => handleTokenInput(e.target.value)}
+                      onChange={(e: any) => setTokenLiquidity(e.target.value)}
                       className="flex-1 bg-transparent text-2xl font-medium placeholder-gray-500 outline-none"
                     />
                     <button className="flex items-center space-x-2 bg-gray-600/50 hover:bg-gray-600 px-3 py-2 rounded-lg transition-all">
@@ -329,7 +302,7 @@ const Body = () => {
                       type="number"
                       placeholder="0.0"
                       value={ethLiquidity}
-                      onChange={(e: any) => handleEthInput(e.target.value)}
+                      onChange={(e: any) => setEthLiquidity(e.target.value)}
                       className="flex-1 bg-transparent text-2xl font-medium placeholder-gray-500 outline-none text-gray-300"
                     />
                     <button className="flex items-center space-x-2 bg-gray-600/50 hover:bg-gray-600 px-3 py-2 rounded-lg transition-all">
@@ -342,7 +315,7 @@ const Body = () => {
 
               <div className="flex justify-center">
                 <button
-                  onClick={addLiquidity}
+                  onClick={() => addLiquidity(tokenLiquidity, ethLiquidity)}
                   className="cursor-pointer p-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg border border-gray-600/50 transition-all hover:scale-110"
                 >
                   Add

@@ -109,10 +109,6 @@ contract DEX is ERC20 {
         payable(msg.sender).transfer(ethOut);
     }
 
-    // ========================
-    // Getters
-    // ========================
-
     /// @notice Gets current swap ratio of token to ETH
     /// @return Contract ratio (tokens per 1 ETH)
     function getRatio() public view returns (uint256) {

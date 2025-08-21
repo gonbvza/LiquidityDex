@@ -35,6 +35,15 @@ contract DEXTest is Test {
         assertEq(dex.getRatio(), expectedRatio);
     }
 
+    /// @notice Tests the calculation of the token/ETH ratio
+    /// @dev Ratio = tokens / ETH in the contract
+    function testSmallRatio() public {
+        uint256 amountToken = 1_000;
+        dex.addLiquidity{value: 1 ether}(amountToken);
+        uint256 expectedRatio = 0; // Simple ratio
+        assertEq(dex.getRatio(), expectedRatio);
+    }
+
     /// @notice Tests adding liquidity twice
     /// @dev Ensures LP token balance updates correctly after multiple additions
     function testAddLiquidityTwice() public {
